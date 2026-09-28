@@ -23,6 +23,17 @@
     return String(v || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
       .map(w => w.split('-').map(p => p ? p[0].toLocaleUpperCase('ru') + p.slice(1).toLocaleLowerCase('ru') : p).join('-')).join(' ');
   }
+  function normPhone(v) {
+    let d = String(v || '').replace(/\D/g, '');
+    if (d.length === 11 && (d[0] === '7' || d[0] === '8')) d = d.slice(1);
+    if (d.length !== 10) return '';
+    return '+7 ' + d.slice(0, 3) + ' ' + d.slice(3, 6) + '-' + d.slice(6, 8) + '-' + d.slice(8);
+  }
+  function phoneError(v) {
+    if (!String(v || '').trim()) return 'Укажи номер телефона';
+    if (!normPhone(v)) return 'Номер должен быть в формате +7 900 000-00-00';
+    return '';
+  }
   function fioError(v) {
     const w = normFio(v).split(' ').filter(Boolean);
     if (w.length < 2) return 'Введи фамилию и имя (и отчество, если есть) — минимум 2 слова.';
@@ -128,7 +139,7 @@ ${last ? `<div class="sec-t">Последние попытки</div><div class="
 
   let pendingStart = null;
   function startQuiz(mode, id) {
-    if (!S.emp) { pendingStart = [mode, id]; return go('#/who'); }
+    if (!S.emp || !normPhone(S.emp.tab)) { pendingStart = [mode, id]; return go('#/who'); }
     let qs, title;
     if (mode === 'exam') {
       // равномерно по главам: минимум 1 вопрос из каждой, остальное случайно
@@ -215,17 +226,21 @@ ${mist.length ? `<div class="sec-t">Разбор ошибок (${mist.length})</
 <label class="fl">ФИО <span class="req">*</span></label>
 <input class="inp" id="fio" name="name" autocomplete="name" autocapitalize="words" placeholder="Иванов Иван Иванович" value="${esc(e.fio || '')}" required>
 <div class="err" id="fioErr"></div>
-<label class="fl">Табельный номер или телефон <span class="muted">(необязательно)</span></label>
-<input class="inp" id="tab" name="tab" inputmode="text" placeholder="например, 012345 или +7 900 000-00-00" value="${esc(e.tab || '')}" maxlength="40">
+<label class="fl">Номер телефона <span class="req">*</span></label>
+<input class="inp" id="tab" name="tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 900 000-00-00" value="${esc(e.tab || '')}" maxlength="20">
+<div class="err" id="tabErr"></div>
 <button class="btn" type="button" id="whoBtn">${pendingStart ? 'Сохранить и начать тест' : 'Сохранить'}</button>
 </div></div>`, { tab: 'test', back: '#/test' });
     const f = $('#whoForm'), inp = $('#fio');
     inp.addEventListener('input', () => { $('#fioErr').textContent = ''; inp.classList.remove('bad'); });
+    $('#tab').addEventListener('input', () => { $('#tabErr').textContent = ''; $('#tab').classList.remove('bad'); });
     const submitWho = ev => {
       if (ev) ev.preventDefault();
       const er = fioError(inp.value);
       if (er) { $('#fioErr').textContent = er; inp.classList.add('bad'); inp.focus(); return; }
-      S.emp = { fio: normFio(inp.value), tab: $('#tab').value.trim().slice(0, 40) }; save();
+      const tel = $('#tab'), pe = phoneError(tel.value);
+      if (pe) { $('#tabErr').textContent = pe; tel.classList.add('bad'); tel.focus(); return; }
+      S.emp = { fio: normFio(inp.value), tab: normPhone(tel.value) }; save();
       toast('Сотрудник: ' + S.emp.fio);
       if (pendingStart) { const p = pendingStart; pendingStart = null; startQuiz(p[0], p[1]); } else go('#/test');
     };
