@@ -130,3 +130,14 @@ code.copy:after{content:" ⧉";opacity:.6}
 .sendst{margin-top:10px;border-radius:12px;padding:10px 12px;font-weight:700;font-size:14.5px}
 .st-ok{background:var(--gl);color:var(--g2)}.st-q{background:var(--yell)}.st-wait{background:var(--bluel)}
 @media (prefers-color-scheme:dark){.st-ok{color:var(--lime)}}
+.lockcard{background:var(--card);border-radius:20px;padding:22px 18px;box-shadow:var(--sh);text-align:center}
+.lockcard h2{margin:6px 0 8px;font-size:21px}.lockcard p{margin:0 0 14px;line-height:1.4}
+.lockcard .lock-ic{font-size:52px;line-height:1}
+.lockcard .btn{margin-top:10px}
+.lockcard .empcard{text-align:left;margin-bottom:12px}
+.lockcard .fl{display:block;text-align:left;margin:16px 0 6px}
+.lockprog{background:var(--gl);border-radius:14px;padding:12px 14px;margin:6px 0 6px;text-align:left}
+.lockprog .pbar{background:rgba(29,154,72,.2);height:8px;border-radius:8px;overflow:hidden}.lockprog .pbar i{display:block;height:100%;background:var(--g);border-radius:8px}
+.lockprog .row{display:flex;justify-content:space-between;font-size:14px;margin-top:6px;font-weight:600}
+.code-inp{text-align:center;font-size:28px;letter-spacing:.5em;font-weight:700;padding-left:.5em}
+.btn:disabled{opacity:.55;cursor:default}

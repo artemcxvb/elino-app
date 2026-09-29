@@ -43,6 +43,24 @@
   }
   const empLine = () => S.emp ? `<div class="emp"><span>👤 Сдаёт: <b>${esc(S.emp.fio)}</b>${S.emp.tab ? ` <span class="muted">(${esc(S.emp.tab)})</span>` : ''}</span></div>` : '';
 
+  // ---------- доступ к тестам: обучение → код от руководителя
+  const UL = window.ELINO_UNLOCK;
+  const ULKEY = 'elino.unlock', REQKEY = 'elino.codereq', TRYKEY = 'elino.codetry';
+  const REQ_COOLDOWN = 60000, MAX_TRIES = 5, TRY_WAIT = 30000;
+  const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } };
+  const phoneDigits = v => { const p = normPhone(v); return p ? '7' + p.replace(/\D/g, '').slice(1) : ''; };
+  const curDigits = () => S.emp ? phoneDigits(S.emp.tab) : '';
+  // в хранилище лежит не флаг, а хэш кода именно для этого телефона: чужой/подделанный флаг не подойдёт
+  const unlockToken = d => UL.hash32(UL.SALT + ':unlock:' + d + ':' + UL.codeFor(d)).toString(36);
+  function isUnlocked() {
+    const d = curDigits(); if (!d) return false;
+    const u = lsGet(ULKEY, {});
+    return u[d] === unlockToken(d);
+  }
+  const chaptersDone = () => CH.every(c => S.read[c.id]);
+  const studiedN = () => CH.filter(c => S.read[c.id]).length;
+
   // ---------- отправка результатов (Google Sheets) с офлайн-очередью
   const QKEY = 'elino.queue';
   const loadQ = () => { try { return JSON.parse(localStorage.getItem(QKEY)) || []; } catch (e) { return []; } };
@@ -71,8 +89,8 @@
     const q = loadQ(); q.push(rec); saveQ(q);
     return flushQueue().then(() => !loadQ().some(r => r.rid === rec.rid));
   }
-  window.addEventListener('online', () => flushQueue().then(r => { if (r.sent) toast('Отправлено результатов: ' + r.sent); }));
-  window.ELINO_DEBUG = { loadQ, flushQueue };
+  window.addEventListener('online', () => flushQueue().then(r => { if (r.sent) { toast('Отправлено: ' + r.sent); if (codeTimer) paintCode(); } }));
+  window.ELINO_DEBUG = { loadQ, flushQueue, isUnlocked, unlockToken };
 
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]]; } return a; };
   const toast = t => { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 1800); };
@@ -84,7 +102,7 @@
     const tab = opts.tab || 'learn';
     const back = opts.back ? `<button class="back" aria-label="Назад" data-go="${opts.back}">‹</button>` : '';
     const badge = opts.badge ? `<span class="badge">${opts.badge}</span>` : '';
-    const tabs = [['learn', '📚', 'Обучение'], ['test', '📝', 'Тест'], ['cheat', '⚡', 'Шпаргалка'], ['more', '⋯', 'Ещё']]
+    const tabs = [['learn', '📚', 'Обучение'], ['test', isUnlocked() ? '📝' : '🔒', 'Тест'], ['cheat', '⚡', 'Шпаргалка'], ['more', '⋯', 'Ещё']]
       .map(([k, i, t]) => `<a href="#/${k}" class="${tab === k ? 'on' : ''}"><span class="ic">${i}</span>${t}</a>`).join('');
     app.innerHTML = `<header class="topbar">${back}<h1>${title}</h1>${badge}</header><main>${body}</main><nav class="tabbar"><div class="in">${tabs}</div></nav>`;
     window.scrollTo(0, 0);
@@ -111,13 +129,14 @@
     shell(c.title, `<article class="content">${c.html}</article>
 <div class="chap-nav">
 <button class="btn" data-act="read" data-id="${id}">${S.read[id] ? '✓ Глава изучена' : 'Отметить как изученную ✓'}</button>
-<button class="btn sec" data-act="quiz-ch" data-id="${id}">📝 Тест по главе (${cnt} вопр.)</button>
+<button class="btn sec" data-act="quiz-ch" data-id="${id}">${isUnlocked() ? `📝 Тест по главе (${cnt} вопр.)` : '🔒 Тест по главе — после обучения'}</button>
 <div class="btn-row">${prev ? `<a class="btn ghost" href="#/ch/${prev.id}">‹ Назад</a>` : '<span></span>'}${next ? `<a class="btn ghost" href="#/ch/${next.id}">Далее ›</a>` : '<span></span>'}</div>
 </div>`, { tab: 'learn', back: '#/learn', badge: `${i + 1}/${CH.length}` });
   }
 
   // ---------- Тест
   function viewTest() {
+    if (!isUnlocked()) return viewLocked();
     const be = S.best.exam, wrongN = Object.keys(S.wrong).length;
     const tiles = CH.map(c => {
       const n = Q.filter(q => q.c === c.id).length, b = S.best['ch:' + c.id];
@@ -126,7 +145,7 @@
     const last = S.hist.slice(-5).reverse().map(h => `<div class="kv"><div class="k" style="font-size:15px;min-width:52px">${h.p}%</div><div class="v">${esc(h.t)}<br><span class="muted small">${new Date(h.d).toLocaleString('ru-RU')}</span></div></div>`).join('');
     const who = S.emp ? `<div class="empcard"><div>👤 Сдаёт: <b>${esc(S.emp.fio)}</b>${S.emp.tab ? `<br><span class="muted small">${esc(S.emp.tab)}</span>` : ''}</div><button class="link" data-act="change-emp">Сменить сотрудника</button></div>`
       : `<button class="empcard empty" data-act="change-emp"><div>👤 <b>Укажи ФИО</b><br><span class="muted small">нужно перед тестом или экзаменом</span></div><span class="link">Ввести ›</span></button>`;
-    const pend = SHEETS_URL ? loadQ().length : 0;
+    const pend = SHEETS_URL ? loadQ().filter(r => r.action !== 'coderequest').length : 0;
     shell('Подготовка к экзамену', `${who}${pend ? `<div class="banner">⏳ Не отправлено результатов: ${pend}. Отправятся при появлении интернета.</div>` : ''}
 <div class="examcard"><h2>🎓 Экзамен</h2><p>${EXAM_N} случайных вопросов по всем главам. Для сдачи нужно ${PASS}% правильных ответов (не менее ${Math.ceil(EXAM_N * PASS / 100)} из ${EXAM_N}).</p>
 <p>Лучший результат: <b>${be != null ? be + '%' : 'ещё не сдавал'}</b></p><button class="btn" data-act="exam">Начать экзамен</button></div>
@@ -137,8 +156,93 @@
 ${last ? `<div class="sec-t">Последние попытки</div><div class="cheat">${last}</div>` : ''}`, { tab: 'test' });
   }
 
+  // ---------- Тесты закрыты: сначала обучение, потом код
+  let codeTimer = null;
+  function reqState() { // состояние запроса кода для текущего телефона
+    const d = curDigits(), r = lsGet(REQKEY, null);
+    if (!r || r.p !== d) return null;
+    const stillQueued = loadQ().some(x => x.rid === r.rid);
+    return { ts: r.ts, state: stillQueued ? 'queued' : 'sent' };
+  }
+  function viewLocked() {
+    const n = studiedN(), total = CH.length;
+    if (!chaptersDone()) {
+      const first = CH.find(c => !S.read[c.id]), pct = Math.round(n / total * 100);
+      shell('Тест', `<div class="lockcard"><div class="lock-ic">🔒</div><h2>Тесты пока закрыты</h2>
+<p class="muted">Сначала пройди обучение: отметь все главы как изученные. Шпаргалка и обучение открыты.</p>
+<div class="lockprog"><div class="pbar"><i style="width:${pct}%"></i></div><div class="row"><span>Изучено ${n} из ${total} глав</span><span>${pct}%</span></div></div>
+<button class="btn" data-go="#/ch/${first.id}">Перейти к главе ${CH.indexOf(first) + 1}: ${esc(first.title)}</button>
+<button class="btn ghost" data-go="#/learn">📚 Все главы</button></div>`, { tab: 'test' });
+      return;
+    }
+    if (!S.emp || !curDigits()) {
+      shell('Тест', `<div class="lockcard"><div class="lock-ic">🎓</div><h2>Обучение пройдено</h2>
+<p class="muted">Чтобы запросить код для тестов, укажи ФИО и номер телефона. Код привязан к твоему номеру.</p>
+<button class="btn" data-act="change-emp">👤 Указать ФИО и телефон</button></div>`, { tab: 'test' });
+      return;
+    }
+    shell('Тест', `<div class="lockcard"><div class="lock-ic">🎓</div><h2>Обучение пройдено</h2>
+<p class="muted">Запросите код у руководителя. Он пришлёт 4-значный код — введи его ниже, и тесты откроются.</p>
+<div class="empcard" style="box-shadow:none;background:var(--bg)"><div>👤 <b>${esc(S.emp.fio)}</b><br><span class="muted small">${esc(S.emp.tab)}</span></div><button class="link" data-act="change-emp">Сменить</button></div>
+<button class="btn" id="reqBtn" data-act="req-code">Запросить код</button>
+<div id="reqSt"></div>
+<label class="fl" for="codeIn">Код от руководителя</label>
+<input class="inp code-inp" id="codeIn" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="one-time-code" placeholder="0000">
+<div class="err" id="codeErr"></div>
+<button class="btn sec" id="codeBtn" data-act="open-code">🔓 Открыть тесты</button></div>`, { tab: 'test' });
+    const inp = $('#codeIn');
+    inp.addEventListener('input', () => { inp.value = inp.value.replace(/\D/g, '').slice(0, 4); $('#codeErr').textContent = ''; inp.classList.remove('bad'); });
+    inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); submitCode(); } });
+    clearInterval(codeTimer); codeTimer = setInterval(paintCode, 1000); paintCode();
+  }
+  function paintCode() {
+    const btn = $('#reqBtn');
+    if (!btn) { clearInterval(codeTimer); codeTimer = null; return; }
+    const st = reqState(), left = st ? Math.ceil((st.ts + REQ_COOLDOWN - Date.now()) / 1000) : 0;
+    btn.disabled = left > 0;
+    btn.textContent = left > 0 ? `Повторить запрос через ${left} с` : (st ? 'Запросить код ещё раз' : 'Запросить код');
+    const el = $('#reqSt');
+    if (el) el.innerHTML = !st ? '' : st.state === 'queued'
+      ? '<div class="sendst st-q">💾 Нет интернета. Запрос сохранён и будет отправлен, когда появится связь. Подключись к интернету.</div>'
+      : '<div class="sendst st-ok">✅ Запрос отправлен. Руководитель пришлёт вам код</div>';
+    const t = lsGet(TRYKEY, { n: 0, until: 0 }), w = Math.ceil((t.until - Date.now()) / 1000), cb = $('#codeBtn');
+    if (cb) { cb.disabled = w > 0; cb.textContent = w > 0 ? `Подожди ${w} с` : '🔓 Открыть тесты'; }
+    const ce = $('#codeErr'); if (ce && w > 0 && !ce.textContent.startsWith('Неверный код')) ce.textContent = `Слишком много попыток. Подожди ${w} с.`;
+    if (ce && w <= 0 && ce.textContent.startsWith('Слишком')) ce.textContent = '';
+  }
+  function requestCode() {
+    const d = curDigits(); if (!d) return go('#/who');
+    if (!SHEETS_URL) return toast('Отправка запроса недоступна в этой версии');
+    const prev = reqState();
+    if (prev && Date.now() - prev.ts < REQ_COOLDOWN) return paintCode();
+    const rec = { action: 'coderequest', rid: 'cr-' + S.dev + '-' + Date.now().toString(36), ts: Date.now(), fio: S.emp.fio, tab: S.emp.tab, device: S.dev };
+    const q = loadQ().filter(r => !(r.action === 'coderequest' && r.tab === rec.tab)); q.push(rec); saveQ(q);
+    lsSet(REQKEY, { p: d, ts: rec.ts, rid: rec.rid });
+    paintCode();
+    if (navigator.onLine === false) return;
+    flushQueue().then(() => paintCode());
+  }
+  function submitCode() {
+    const d = curDigits(), inp = $('#codeIn'), err = $('#codeErr'); if (!d || !inp) return;
+    let t = lsGet(TRYKEY, { n: 0, until: 0 });
+    if (t.until > Date.now()) return paintCode();
+    if (inp.value.length !== 4) { err.textContent = 'Введи 4 цифры кода'; inp.classList.add('bad'); return; }
+    if (inp.value === UL.codeFor(d)) {
+      const u = lsGet(ULKEY, {}); u[d] = unlockToken(d); lsSet(ULKEY, u); lsSet(TRYKEY, { n: 0, until: 0 });
+      clearInterval(codeTimer); codeTimer = null;
+      toast('Тесты открыты ✓'); go('#/test'); return;
+    }
+    t = { n: (t.n || 0) + 1, until: 0 };
+    if (t.n >= MAX_TRIES) { t.until = Date.now() + TRY_WAIT; t.n = 0; }
+    lsSet(TRYKEY, t);
+    err.textContent = 'Неверный код'; inp.classList.add('bad'); inp.value = '';
+    if (navigator.vibrate) navigator.vibrate(60);
+    paintCode();
+  }
+
   let pendingStart = null;
   function startQuiz(mode, id) {
+    if (!isUnlocked()) return go('#/test');
     if (!S.emp || !normPhone(S.emp.tab)) { pendingStart = [mode, id]; return go('#/who'); }
     let qs, title;
     if (mode === 'exam') {
@@ -154,7 +258,7 @@ ${last ? `<div class="sec-t">Последние попытки</div><div class="
   }
 
   function viewQuiz() {
-    if (!quiz) return go('#/test');
+    if (!quiz || !isUnlocked()) return go('#/test');
     if (quiz.i >= quiz.qs.length) return viewResult();
     const q = quiz.qs[quiz.i], n = quiz.qs.length, a = quiz.ans[quiz.i];
     const L = 'АБВГ';
@@ -308,7 +412,7 @@ ${deferredPrompt ? '<button class="btn" data-act="install">Установить 
 <b>iPhone (Safari):</b><ol><li>Открой ссылку в <b>Safari</b>.</li><li>Нажми кнопку <b>«Поделиться»</b> (квадрат со стрелкой вверх).</li><li>Выбери <b>«На экран „Домой“»</b> → «Добавить».</li></ol>
 <p class="small muted">Если у тебя файл <b>elino-instrukciya.html</b> — просто открой его в браузере телефона: всё работает офлайн, прогресс сохраняется в этом браузере.</p></div>
 <div class="inst"><h3>👤 Сотрудник</h3><p>${S.emp ? `<b>${esc(S.emp.fio)}</b>${S.emp.tab ? '<br>' + esc(S.emp.tab) : ''}` : 'Не указан'}</p><button class="btn sec" data-act="change-emp">${S.emp ? 'Сменить сотрудника' : 'Указать ФИО'}</button>
-${SHEETS_URL ? `<p class="small muted">Результаты тестов отправляются руководителю. Не отправлено: ${loadQ().length}.</p>` : ''}<p class="small muted">ID устройства: ${S.dev}</p></div>
+${SHEETS_URL ? `<p class="small muted">Результаты тестов отправляются руководителю. Не отправлено: ${loadQ().filter(r => r.action !== 'coderequest').length}.</p>` : ''}<p class="small muted">ID устройства: ${S.dev}</p></div>
 <div class="inst"><h3>📊 Мой прогресс</h3>
 <p>Изучено глав: <b>${CH.filter(c => S.read[c.id]).length} из ${CH.length}</b><br>Лучший результат экзамена: <b>${S.best.exam != null ? S.best.exam + '%' : '—'}</b><br>Вопросов в работе над ошибками: <b>${Object.keys(S.wrong).length}</b></p>
 <button class="btn ghost" data-act="reset">Сбросить прогресс</button></div>
@@ -319,6 +423,7 @@ ${SHEETS_URL ? `<p class="small muted">Результаты тестов отп�
   // ---------- routing
   function go(h) { if (location.hash === h) route(); else location.hash = h; }
   function route() {
+    if (codeTimer) { clearInterval(codeTimer); codeTimer = null; }
     const h = location.hash.replace(/^#\/?/, '');
     const [p, a] = h.split('/');
     if (p === 'ch') viewChapter(a);
@@ -339,7 +444,7 @@ ${SHEETS_URL ? `<p class="small muted">Результаты тестов отп�
     const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); return go(g.dataset.go); }
     const b = e.target.closest('[data-act]'); if (!b) return;
     const act = b.dataset.act, id = b.dataset.id;
-    if (act === 'read') { S.read[id] = !S.read[id]; save(); if (S.read[id]) { toast('Глава отмечена как изученная ✓'); } viewChapter(id); window.scrollTo(0, document.body.scrollHeight); }
+    if (act === 'read') { S.read[id] = !S.read[id]; save(); if (S.read[id]) { toast(chaptersDone() && !isUnlocked() ? 'Обучение пройдено! Открой вкладку «Тест»' : 'Глава отмечена как изученная ✓'); } viewChapter(id); window.scrollTo(0, document.body.scrollHeight); }
     else if (act === 'quiz-ch') startQuiz('ch', id);
     else if (act === 'exam') startQuiz('exam');
     else if (act === 'all') startQuiz('all');
@@ -347,6 +452,8 @@ ${SHEETS_URL ? `<p class="small muted">Результаты тестов отп�
     else if (act === 'ans') answer(+b.dataset.k);
     else if (act === 'next') { quiz.i++; viewQuiz(); }
     else if (act === 'again') startQuiz(quiz.mode, quiz.id);
+    else if (act === 'req-code') requestCode();
+    else if (act === 'open-code') submitCode();
     else if (act === 'change-emp') { pendingStart = null; go('#/who'); }
     else if (act === 'install' && deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; }
     else if (act === 'reset') { if (confirm('Сбросить весь прогресс и результаты?')) { S = { read: {}, best: {}, wrong: {}, hist: [], dev: S.dev, emp: S.emp }; save(); viewMore(); toast('Прогресс сброшен'); } }
