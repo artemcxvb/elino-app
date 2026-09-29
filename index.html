@@ -18,6 +18,7 @@
 <body>
 <div id="app"></div>
 <noscript>Для работы приложения включите JavaScript.</noscript>
+<script>/*BOOT*/(function(){var V='66c04258';try{if(location.protocol.indexOf('http')!==0)return;if(localStorage.getItem('elino.build')===V)return;localStorage.setItem('elino.build',V);var p=[];if(navigator.serviceWorker)p.push(navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister()}))}));if(window.caches)p.push(caches.keys().then(function(k){return Promise.all(k.map(function(x){return caches.delete(x)}))}));Promise.all(p).then(function(){location.reload()},function(){})}catch(e){}})();</script>
 <script src="config.js"></script>
 <script src="unlock.js"></script>
 <script src="data.js"></script>

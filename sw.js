@@ -1,5 +1,5 @@
 /* Service worker: офлайн-кэш всего приложения */
-const CACHE='elino-c3bddec4';
+const CACHE='elino-3f6c2446';
 const ASSETS=[
 "./",
 "./app.js",
