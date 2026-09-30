@@ -3,7 +3,7 @@
   const D = window.ELINO, CH = D.chapters;
   const Q = window.ELINO_Q.map((r, i) => ({ id: i, c: r[0], q: r[1], ok: r[2], bad: r[3], e: r[4] }));
   const chById = Object.fromEntries(CH.map(c => [c.id, c]));
-  const EXAM_N = 20, PASS = 80;
+  const EXAM_N = 20, PASS = 95;
   const KEY = 'elino.v1';
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
