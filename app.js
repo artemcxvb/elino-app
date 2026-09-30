@@ -3,7 +3,7 @@
   const D = window.ELINO, CH = D.chapters;
   const Q = window.ELINO_Q.map((r, i) => ({ id: i, c: r[0], q: r[1], ok: r[2], bad: r[3], e: r[4] }));
   const chById = Object.fromEntries(CH.map(c => [c.id, c]));
-  const EXAM_N = 20, PASS = 95;
+  const PASS = 95, EXAM_N = Q.length;
   const KEY = 'elino.v1';
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
@@ -147,10 +147,9 @@
       : `<button class="empcard empty" data-act="change-emp"><div>👤 <b>Укажи ФИО</b><br><span class="muted small">нужно перед тестом или экзаменом</span></div><span class="link">Ввести ›</span></button>`;
     const pend = SHEETS_URL ? loadQ().filter(r => r.action !== 'coderequest').length : 0;
     shell('Подготовка к экзамену', `${who}${pend ? `<div class="banner">⏳ Не отправлено результатов: ${pend}. Отправятся при появлении интернета.</div>` : ''}
-<div class="examcard"><h2>🎓 Экзамен</h2><p>${EXAM_N} случайных вопросов по всем главам. Для сдачи нужно ${PASS}% правильных ответов (не менее ${Math.ceil(EXAM_N * PASS / 100)} из ${EXAM_N}).</p>
+<div class="examcard"><h2>🎓 Экзамен</h2><p>Все ${EXAM_N} вопросов по всем главам в случайном порядке. Для сдачи нужно ${PASS}% правильных ответов (не менее ${Math.ceil(EXAM_N * PASS / 100)} из ${EXAM_N}).</p>
 <p>Лучший результат: <b>${be != null ? be + '%' : 'ещё не сдавал'}</b></p><button class="btn" data-act="exam">Начать экзамен</button></div>
 <div class="grid2" style="margin-top:12px">
-<button class="tile" data-act="all"><div class="n">${Q.length}</div><div class="d">Все вопросы подряд (тренировка)</div></button>
 <button class="tile" data-act="wrong"><div class="n">${wrongN}</div><div class="d">Работа над ошибками</div></button></div>
 <div class="sec-t">Тест по главам</div><div class="list">${tiles}</div>
 ${last ? `<div class="sec-t">Последние попытки</div><div class="cheat">${last}</div>` : ''}`, { tab: 'test' });
@@ -246,13 +245,10 @@ ${last ? `<div class="sec-t">Последние попытки</div><div class="
     if (!S.emp || !normPhone(S.emp.tab)) { pendingStart = [mode, id]; return go('#/who'); }
     let qs, title;
     if (mode === 'exam') {
-      // равномерно по главам: минимум 1 вопрос из каждой, остальное случайно
-      const pick = []; CH.forEach(c => { const pool = shuffle(Q.filter(q => q.c === c.id)); if (pool.length) pick.push(pool[0]); });
-      const rest = shuffle(Q.filter(q => !pick.includes(q)));
-      qs = shuffle(pick.concat(rest).slice(0, EXAM_N)); title = 'Экзамен';
+      qs = shuffle(Q.slice()); title = 'Экзамен';
     } else if (mode === 'ch') { qs = shuffle(Q.filter(q => q.c === id)); title = 'Тест: ' + chById[id].title; }
     else if (mode === 'wrong') { qs = shuffle(Q.filter(q => S.wrong[q.id])); title = 'Работа над ошибками'; if (!qs.length) return toast('Ошибок нет — отлично! 🎉'); }
-    else { qs = shuffle(Q); title = 'Все вопросы'; }
+    else return;
     quiz = { mode, id, title, qs: qs.map(q => ({ ...q, opts: shuffle([q.ok, ...q.bad]) })), i: 0, ans: [], t0: Date.now() };
     go('#/quiz');
   }
@@ -447,7 +443,6 @@ ${SHEETS_URL ? `<p class="small muted">Результаты тестов отп�
     if (act === 'read') { S.read[id] = !S.read[id]; save(); if (S.read[id]) { toast(chaptersDone() && !isUnlocked() ? 'Обучение пройдено! Открой вкладку «Тест»' : 'Глава отмечена как изученная ✓'); } viewChapter(id); window.scrollTo(0, document.body.scrollHeight); }
     else if (act === 'quiz-ch') startQuiz('ch', id);
     else if (act === 'exam') startQuiz('exam');
-    else if (act === 'all') startQuiz('all');
     else if (act === 'wrong') startQuiz('wrong');
     else if (act === 'ans') answer(+b.dataset.k);
     else if (act === 'next') { quiz.i++; viewQuiz(); }
